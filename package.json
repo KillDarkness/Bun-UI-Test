@@ -1,0 +1,28 @@
+{
+  "name": "buntestui",
+  "version": "1.0.0",
+  "description": "A beautiful UI for running Bun tests",
+  "type": "module",
+  "bin": {
+    "buntestui": "./cli.ts"
+  },
+  "scripts": {
+    "build": "cd app && bun run build",
+    "dev": "bun run ui-runner.ts"
+  },
+  "keywords": [
+    "bun",
+    "test",
+    "ui",
+    "testing",
+    "runner"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13"
+  }
+}
