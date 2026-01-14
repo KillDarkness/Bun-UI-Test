@@ -118,7 +118,7 @@ async function runTestUI() {
   }
   
   console.log("🚀 Starting Bun Test UI (Production Mode)...\n");
-  console.log("📡 WebSocket server: ws://localhost:5060");
+  console.log("📡 WebSocket server: ws://localhost:5050/ws");
   console.log("🌐 Frontend: http://localhost:5050\n");
   console.log("Press Ctrl+C to stop\n");
   
