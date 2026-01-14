@@ -33,109 +33,136 @@ const getBaseDir = () => {
 
 const baseDir = getBaseDir();
 const distPath = join(baseDir, "app", "dist");
-
-// Servidor HTTP para servir o frontend (porta 5050) - APENAS em modo produção
 const isDevMode = process.env.BUN_TEST_UI_DEV === "true";
 
-if (!isDevMode && existsSync(distPath)) {
-  Bun.serve({
-    port: 5050,
-    async fetch(req) {
-      const url = new URL(req.url);
-      let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
-      const fullPath = join(distPath, filePath);
+// WebSocket Handler (lógica compartilhada)
+const websocketHandler = {
+  async open(ws: any) {
+    console.log("✓ UI connected");
+    
+    // Escaneia arquivos de teste
+    const testFiles = await scanTestFiles();
+    
+    // Escaneia todos os testes de cada arquivo
+    console.log("📖 Reading test files to extract test names...");
+    const testsMap = await scanAllTests();
+    
+    // Envia evento de conexão com lista de arquivos e testes
+    ws.send(JSON.stringify({
+      type: "connected",
+      payload: { 
+        message: "Runner ready",
+        testFiles,
+        testsMap // { "test/example.test.ts": ["test1", "test2", ...] }
+      }
+    }));
+    
+    console.log(`✓ Found ${testFiles.length} test files with ${Object.values(testsMap).flat().length} tests total`);
+  },
+  message(ws: any, message: any) {
+    try {
+      const data = JSON.parse(message.toString());
+      console.log('📨 [WEBSOCKET] Mensagem recebida:', data.type, data.payload);
       
-      try {
-        const file = Bun.file(fullPath);
-        if (await file.exists()) {
-          return new Response(file);
+      // Processa comandos da UI
+      if (data.type === "run:request") {
+        const file = data.payload?.file;
+        const testName = data.payload?.testName;
+        
+        console.log('▶️ [RUN REQUEST] file:', file, 'testName:', testName);
+        
+        if (testName) {
+          console.log(`Running specific test: ${testName} in ${file}`);
+        } else if (file) {
+          console.log(`Running file: ${file}`);
+        } else {
+          console.log("Running all tests");
         }
         
-        // Se não encontrou o arquivo e não é um asset, serve index.html (SPA)
-        if (!filePath.includes(".")) {
-          const indexFile = Bun.file(join(distPath, "index.html"));
-          return new Response(indexFile);
+        runTests(ws, file, testName);
+      } else {
+        console.log('⚠️ [WEBSOCKET] Tipo desconhecido:', data.type);
+      }
+    } catch (err) {
+      console.error("Error processing message:", err);
+    }
+  },
+  close(ws: any) {
+    console.log("✗ UI disconnected");
+  },
+};
+
+if (isDevMode) {
+  // === MODO DESENVOLVIMENTO ===
+  // Frontend roda via Vite na porta 5050
+  // Backend roda separadamente na porta 5060 (apenas WS)
+  
+  Bun.serve({
+    port: 5060,
+    fetch(req, server) {
+      // Aceita upgrade em qualquer path ou especificamente /ws
+      if (server.upgrade(req)) {
+        return; 
+      }
+      return new Response("Bun Test UI Backend (Dev Mode)", { status: 200 });
+    },
+    websocket: websocketHandler
+  });
+  
+  console.log("📡 WebSocket server running on ws://localhost:5060");
+  
+} else {
+  // === MODO PRODUÇÃO ===
+  // Servidor ÚNICO na porta 5050
+  // Serve arquivos estáticos do frontend E WebSocket no mesmo endpoint
+  
+  const PORT = 5050;
+  
+  Bun.serve({
+    port: PORT,
+    async fetch(req, server) {
+      const url = new URL(req.url);
+      
+      // 1. WebSocket Upgrade (/ws)
+      if (url.pathname === "/ws") {
+        if (server.upgrade(req)) {
+          return;
         }
-      } catch (err) {
-        console.error("Error serving file:", err);
+        return new Response("WebSocket upgrade failed", { status: 400 });
+      }
+      
+      // 2. Arquivos Estáticos (Frontend)
+      if (existsSync(distPath)) {
+        let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
+        const fullPath = join(distPath, filePath);
+        
+        try {
+          const file = Bun.file(fullPath);
+          if (await file.exists()) {
+            return new Response(file);
+          }
+          
+          // Se não encontrou o arquivo e não é um asset (SPA fallback)
+          if (!filePath.includes(".")) {
+            const indexFile = Bun.file(join(distPath, "index.html"));
+            return new Response(indexFile);
+          }
+        } catch (err) {
+          console.error("Error serving file:", err);
+        }
+      } else {
+        return new Response("Frontend build not found. Run 'buntestui build' first.", { status: 404 });
       }
       
       return new Response("Not found", { status: 404 });
-    }
+    },
+    websocket: websocketHandler
   });
-  console.log("🌐 Frontend server running on http://localhost:5050");
-} else if (!isDevMode) {
-  console.log("⚠️  Frontend build not found. Run 'buntestui build' or 'buntestui dev' first.");
+  
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📡 WebSocket endpoint available at ws://localhost:${PORT}/ws`);
 }
 
-// WebSocket server (porta 5060)
-const server = Bun.serve({
-  port: 5060,
-  fetch(req, server) {
-    // Upgrade HTTP connection to WebSocket
-    if (server.upgrade(req)) {
-      return; // Connection upgraded to WebSocket
-    }
-    return new Response("WebSocket server running on port 5060", { status: 200 });
-  },
-  websocket: {
-    async open(ws) {
-      console.log("✓ UI connected");
-      
-      // Escaneia arquivos de teste
-      const testFiles = await scanTestFiles();
-      
-      // Escaneia todos os testes de cada arquivo
-      console.log("📖 Reading test files to extract test names...");
-      const testsMap = await scanAllTests();
-      
-      // Envia evento de conexão com lista de arquivos e testes
-      ws.send(JSON.stringify({
-        type: "connected",
-        payload: { 
-          message: "Runner ready",
-          testFiles,
-          testsMap // { "test/example.test.ts": ["test1", "test2", ...] }
-        }
-      }));
-      
-      console.log(`✓ Found ${testFiles.length} test files with ${Object.values(testsMap).flat().length} tests total`);
-    },
-    message(ws, message) {
-      try {
-        const data = JSON.parse(message.toString());
-        console.log('📨 [WEBSOCKET] Mensagem recebida:', data.type, data.payload);
-        
-        // Processa comandos da UI
-        if (data.type === "run:request") {
-          const file = data.payload?.file;
-          const testName = data.payload?.testName;
-          
-          console.log('▶️ [RUN REQUEST] file:', file, 'testName:', testName);
-          
-          if (testName) {
-            console.log(`Running specific test: ${testName} in ${file}`);
-          } else if (file) {
-            console.log(`Running file: ${file}`);
-          } else {
-            console.log("Running all tests");
-          }
-          
-          runTests(ws, file, testName);
-        } else {
-          console.log('⚠️ [WEBSOCKET] Tipo desconhecido:', data.type);
-        }
-      } catch (err) {
-        console.error("Error processing message:", err);
-      }
-    },
-    close(ws) {
-      console.log("✗ UI disconnected");
-    },
-  },
-});
-
-console.log(`📡 WebSocket server running on ws://localhost:${server.port}`);
 
 /**
  * Escaneia recursivamente todo o projeto e retorna lista de arquivos de teste
@@ -262,7 +289,7 @@ function runTests(ws: any, file?: string, testName?: string) {
   // Escapa caracteres especiais de regex e usa o nome exato
   if (testName) {
     // Escapa caracteres especiais de regex
-    const escapedName = testName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedName = testName.replace(/[.*+?^${}()|[\\]/g, '\\$&');
     args.push("--test-name-pattern", escapedName);
   }
   

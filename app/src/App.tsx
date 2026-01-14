@@ -107,10 +107,11 @@ function App() {
 
   useEffect(() => {
     // Conecta ao WebSocket do runner
-    // Em dev mode, usa o proxy do Vite; em produção, conecta diretamente
+    // Em dev mode, usa o proxy do Vite; em produção, conecta diretamente na mesma origem
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsUrl = import.meta.env.DEV 
-      ? 'ws://localhost:5050/ws'  // Proxy via Vite dev server
-      : 'ws://localhost:5060'      // Direto ao backend em produção
+      ? `ws://localhost:5050/ws`  // Proxy via Vite dev server
+      : `${protocol}//${window.location.host}/ws` // Direto na mesma origem em produção
     
     console.log('Connecting to WebSocket:', wsUrl)
     const ws = new WebSocket(wsUrl)
