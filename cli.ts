@@ -9,8 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const COMMANDS = {
-  build: "Build the frontend and backend",
-  run: "Run the test UI (production mode - uses built files)",
+  run: "Run the test UI (production mode)",
   dev: "Run in development mode (hot reload)",
   help: "Show this help message"
 };
@@ -23,13 +22,11 @@ Usage:
   buntestui <command>
 
 Commands:
-  build     Build the frontend and backend for production
-  run       Start the test UI (production mode - uses built files)
+  run       Start the test UI (production mode)
   dev       Start in development mode (hot reload enabled)
   help      Show this help message
 
 Examples:
-  buntestui build    # Build frontend + backend
   buntestui run      # Run in production mode
   buntestui dev      # Run in development mode (for testing)
 `);
@@ -62,31 +59,6 @@ async function buildFrontend() {
   });
 }
 
-async function buildBackend() {
-  console.log("🔧 Building backend...\n");
-  
-  return new Promise<void>((resolve, reject) => {
-    const proc = spawn("bun", ["build", "--compile", "--outfile", "buntestui-runner", "./ui-runner.ts"], {
-      cwd: __dirname,
-      stdio: "inherit",
-      shell: true
-    });
-    
-    proc.on("close", (code) => {
-      if (code === 0) {
-        console.log("\n✅ Backend built successfully!");
-        resolve();
-      } else {
-        reject(new Error(`Backend build failed with code ${code}`));
-      }
-    });
-    
-    proc.on("error", (err) => {
-      reject(err);
-    });
-  });
-}
-
 async function checkBuildExists(): Promise<boolean> {
   try {
     const distPath = join(__dirname, "app", "dist", "index.html");
@@ -98,23 +70,14 @@ async function checkBuildExists(): Promise<boolean> {
 }
 
 async function runTestUI() {
-  // Verifica se o build existe
+  // Verifica se o build do frontend existe
   const buildExists = await checkBuildExists();
   
   if (!buildExists) {
-    console.log("⚠️  Frontend not built yet. Building now...\n");
-    await buildFrontend();
-    console.log("");
-  }
-  
-  // Verifica se o executável do backend existe
-  const runnerExecutable = join(__dirname, "buntestui-runner");
-  try {
-    await access(runnerExecutable);
-  } catch {
-    console.log("⚠️  Backend not built yet. Building now...\n");
-    await buildBackend();
-    console.log("");
+    console.log("⚠️  Frontend assets not found.\n");
+    console.log("If you are running from source, please run: bun run build");
+    console.log("If you installed via npm, this might be a packaging issue.\n");
+    process.exit(1);
   }
   
   console.log("🚀 Starting Bun Test UI (Production Mode)...\n");
@@ -122,11 +85,15 @@ async function runTestUI() {
   console.log("🌐 Frontend: http://localhost:5050\n");
   console.log("Press Ctrl+C to stop\n");
   
-  // Roda o executável compilado
-  const proc = spawn(runnerExecutable, [], {
+  // Roda o script do backend diretamente com Bun
+  // O usuário OBRIGATORIAMENTE tem Bun instalado para usar esta ferramenta
+  const runnerScript = join(__dirname, "ui-runner.ts");
+  
+  const proc = spawn("bun", ["run", runnerScript], {
     cwd: process.cwd(), // Roda no diretório atual do usuário
     stdio: "inherit",
-    shell: false
+    shell: false,
+    env: { ...process.env, NODE_ENV: "production" }
   });
   
   proc.on("close", (code) => {
@@ -201,18 +168,6 @@ async function runDevMode() {
 const command = process.argv[2];
 
 switch (command) {
-  case "build":
-    Promise.all([buildFrontend(), buildBackend()])
-      .then(() => {
-        console.log("\n🎉 Build complete!");
-        process.exit(0);
-      })
-      .catch((err) => {
-        console.error("❌ Build failed:", err);
-        process.exit(1);
-      });
-    break;
-    
   case "run":
     runTestUI()
       .catch((err) => {

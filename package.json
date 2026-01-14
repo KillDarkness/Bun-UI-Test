@@ -6,9 +6,14 @@
   "bin": {
     "buntestui": "./cli.ts"
   },
+  "files": [
+    "cli.ts",
+    "ui-runner.ts",
+    "app/dist"
+  ],
   "scripts": {
-    "build": "cd app && bun run build",
-    "dev": "bun run ui-runner.ts"
+    "dev": "bun run ui-runner.ts",
+    "prepublishOnly": "cd app && bun install && bun run build"
   },
   "keywords": [
     "bun",
