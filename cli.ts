@@ -12,7 +12,13 @@ function getPackageRoot() {
     return import.meta.dir;
   }
 
-  // 2. Tentar process.argv[1] (caminho do script)
+  // 2. Tentar via import.meta.url
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    return dirname(__filename);
+  } catch (e) {}
+
+  // 3. Tentar process.argv[1] (caminho do script)
   try {
     const argvPath = process.argv[1];
     if (argvPath) {
@@ -21,10 +27,10 @@ function getPackageRoot() {
         return dirname(argvPath);
       }
       
-      // Se é um executável, procura node_modules
+      // Se é um executável, procura node_modules ou cache
       // bunx instala em: ~/.bun/install/cache/bun-ui-tests@version/
       const parts = argvPath.split('/');
-      const cacheIndex = parts.findIndex(p => p === 'cache');
+      const cacheIndex = parts.findIndex(p => p === 'cache' || p === '.bun' || p === 'node_modules');
       if (cacheIndex !== -1 && cacheIndex + 1 < parts.length) {
         // Pega até o nome do pacote (ex: bun-ui-tests@1.0.5)
         const packagePath = parts.slice(0, cacheIndex + 2).join('/');
@@ -35,18 +41,47 @@ function getPackageRoot() {
     console.error('Error resolving from argv[1]:', e);
   }
 
-  // 3. Fallback: usar diretório atual
-  console.warn('⚠️ Could not determine package root, using current directory');
+  // 4. Fallback: usar diretório atual
   return process.cwd();
 }
 
-const packageRoot = getPackageRoot();
+let packageRoot = getPackageRoot();
 
 const COMMANDS = {
   run: "Run the test UI (production mode)",
   dev: "Run in development mode (hot reload)",
   help: "Show this help message"
 };
+
+async function findVerifiedRoot(): Promise<string> {
+  const possibleRoots = [
+    packageRoot,
+    process.cwd(),
+    dirname(fileURLToPath(import.meta.url)),
+  ];
+
+  for (const root of possibleRoots) {
+    if (!root) continue;
+    const runnerPath = join(root, "ui-runner.ts");
+    const distPath = join(root, "app", "dist", "index.html");
+    
+    if (await Bun.file(runnerPath).exists() && await Bun.file(distPath).exists()) {
+      return root;
+    }
+  }
+
+  // Se não achou, tenta procurar subindo diretórios (útil se estiver em node_modules/.bin)
+  try {
+    let current = packageRoot;
+    for (let i = 0; i < 3; i++) {
+      const runnerPath = join(current, "ui-runner.ts");
+      if (await Bun.file(runnerPath).exists()) return current;
+      current = dirname(current);
+    }
+  } catch (e) {}
+
+  return packageRoot;
+}
 
 async function showHelp() {
   console.log(`
@@ -66,33 +101,18 @@ Examples:
 `);
 }
 
-async function checkBuildExists(): Promise<boolean> {
-  const distPath = join(packageRoot, "app", "dist", "index.html");
+async function checkBuildExists(root: string): Promise<boolean> {
+  const distPath = join(root, "app", "dist", "index.html");
   
   console.log(`🔍 Debug Info:`);
   console.log(`   - process.argv[1]: ${process.argv[1]}`);
-  console.log(`   - Resolved packageRoot: ${packageRoot}`);
+  console.log(`   - Resolved packageRoot: ${root}`);
   console.log(`   - Looking for: ${distPath}`);
   
   try {
     const exists = await Bun.file(distPath).exists();
     if (!exists) {
       console.log(`   - File exists: NO ❌`);
-      
-      // Tentar procurar em locais alternativos
-      const alternatives = [
-        join(process.cwd(), "app", "dist", "index.html"),
-        join(dirname(process.argv[0]), "app", "dist", "index.html"),
-      ];
-      
-      console.log(`\n🔍 Trying alternative paths:`);
-      for (const alt of alternatives) {
-        const altExists = await Bun.file(alt).exists();
-        console.log(`   - ${alt}: ${altExists ? '✓' : '✗'}`);
-        if (altExists) {
-          return true;
-        }
-      }
     } else {
       console.log(`   - File exists: YES ✓`);
     }
@@ -104,8 +124,11 @@ async function checkBuildExists(): Promise<boolean> {
 }
 
 async function runTestUI() {
+  // Encontra o root real onde estão os arquivos
+  packageRoot = await findVerifiedRoot();
+
   // Verifica se o build do frontend existe
-  const buildExists = await checkBuildExists();
+  const buildExists = await checkBuildExists(packageRoot);
   
   if (!buildExists) {
     console.log("\n⚠️  Frontend assets not found.\n");
@@ -160,6 +183,9 @@ async function runTestUI() {
 }
 
 async function runDevMode() {
+  // Encontra o root real onde estão os arquivos
+  packageRoot = await findVerifiedRoot();
+
   console.log("🚀 Starting Bun Test UI (Development Mode)...\n");
   console.log("📡 WebSocket server: ws://localhost:5060");
   console.log("🌐 Frontend: http://localhost:5050 (with hot reload)\n");

@@ -14,24 +14,35 @@
 import { spawn } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Determina o diretório do executável ou script
 const getBaseDir = () => {
-  // Se rodando como executável compilado, pega o diretório onde o CLI foi instalado
-  if (import.meta.path && !import.meta.path.endsWith('.ts')) {
-    return dirname(process.execPath);
+  // 1. Tentar import.meta.dir (Bun específico)
+  if (import.meta.dir) {
+    return import.meta.dir;
   }
+
+  // 2. Tentar via import.meta.url
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    return dirname(__filename);
+  } catch (e) {}
   
-  // Try process.argv[1] to find real path
+  // 3. Try process.argv[1] to find real path
   try {
      const argvPath = process.argv[1];
-     if (argvPath && argvPath.endsWith("ui-runner.ts")) {
+     if (argvPath) {
+       // Se rodando como executável compilado, pega o diretório onde o CLI foi instalado
+       if (import.meta.path && !import.meta.path.endsWith('.ts')) {
+         return dirname(process.execPath);
+       }
        return dirname(argvPath);
      }
   } catch (e) {}
 
-  // Se rodando como script .ts, usa o dir do próprio arquivo
-  return import.meta.dir;
+  // Se tudo falhar
+  return process.cwd();
 };
 
 const baseDir = getBaseDir();
