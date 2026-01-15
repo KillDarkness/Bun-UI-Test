@@ -4,7 +4,7 @@
   "description": "A beautiful UI for running Bun tests",
   "type": "module",
   "bin": {
-    "buntestui": "./cli.ts"
+    "buntestui": "cli.ts"
   },
   "files": [
     "cli.ts",

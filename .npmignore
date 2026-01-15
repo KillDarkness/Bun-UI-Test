@@ -1,0 +1,13 @@
+# Ignore source files not needed in production
+app/src
+app/public
+app/*.json
+app/*.ts
+app/*.js
+test/
+docs/
+.gemini/
+.github/
+
+# But DO NOT ignore the build output
+!app/dist/
