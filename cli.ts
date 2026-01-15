@@ -100,14 +100,21 @@ async function findVerifiedRoot(): Promise<string> {
     dirname(fileURLToPath(import.meta.url)),
   ];
 
+  // Debug log para rastrear a decisão
+  const checkedPaths: string[] = [];
+
   for (const root of possibleRoots) {
     if (!root) continue;
     const runnerPath = join(root, "ui-runner.ts");
     const distPath = join(root, "app", "dist", "index.html");
     
-    if (await Bun.file(runnerPath).exists() && await Bun.file(distPath).exists()) {
+    const runnerExists = await Bun.file(runnerPath).exists();
+    const distExists = await Bun.file(distPath).exists();
+
+    if (runnerExists && distExists) {
       return root;
     }
+    checkedPaths.push(`${root} (runner: ${runnerExists}, dist: ${distExists})`);
   }
 
   // Fallback: search in global cache
@@ -127,6 +134,9 @@ async function findVerifiedRoot(): Promise<string> {
       current = dirname(current);
     }
   } catch (e) {}
+
+  // Salva os caminhos verificados no objeto global para debug
+  (globalThis as any)._debugCheckedPaths = checkedPaths;
 
   return getPackageRoot();
 }
@@ -173,19 +183,34 @@ async function runTestUI() {
     console.log(`${colors.gray}--- Debug Information ---`);
     console.log(`Resolved Root: ${root}`);
     console.log(`import.meta.url: ${import.meta.url}`);
-    console.log(`process.argv[1]: ${process.argv[1]}`);
-    console.log(`process.cwd(): ${process.cwd()}`);
+    
+    const checkedPaths = (globalThis as any)._debugCheckedPaths || [];
+    if (checkedPaths.length > 0) {
+        console.log("Checked Paths:");
+        checkedPaths.forEach((p: string) => console.log(`  - ${p}`));
+    }
     
     try {
-      console.log(`\nContents of ${root}:`);
+      console.log(`\nListing contents of ${root} (max 10):`);
       const entries = await readdir(root);
-      console.log(entries.join("\n"));
+      console.log(entries.slice(0, 10).join("\n"));
+      if (entries.length > 10) console.log(`... and ${entries.length - 10} more`);
       
       const appPath = join(root, "app");
-      if (await Bun.file(appPath).exists() || await Bun.file(join(appPath, "package.json")).exists()) {
-          console.log(`\nContents of ${appPath}:`);
+      const appDistPath = join(appPath, "dist");
+      
+      if (await Bun.file(appPath).exists()) {
+          console.log(`\nContents of app (max 10):`);
           const appEntries = await readdir(appPath);
-          console.log(appEntries.join("\n"));
+          console.log(appEntries.slice(0, 10).join("\n"));
+          
+          if (await Bun.file(appDistPath).exists()) {
+             console.log(`\nContents of app/dist (max 10):`);
+             const distEntries = await readdir(appDistPath);
+             console.log(distEntries.slice(0, 10).join("\n"));
+          } else {
+             console.log(`\napp/dist does not exist at ${appDistPath}`);
+          }
       }
     } catch (e) {
       console.log(`Error reading directory: ${e}`);
