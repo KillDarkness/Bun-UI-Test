@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 
 import { spawn } from "node:child_process";
-import { readFile, access } from "node:fs/promises";
+import { readdir, readFile, access } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
 
 // Função robusta para determinar o diretório raiz do pacote
 function getPackageRoot() {
@@ -28,11 +29,9 @@ function getPackageRoot() {
       }
       
       // Se é um executável, procura node_modules ou cache
-      // bunx instala em: ~/.bun/install/cache/bun-ui-tests@version/
       const parts = argvPath.split('/');
       const cacheIndex = parts.findIndex(p => p === 'cache' || p === '.bun' || p === 'node_modules');
       if (cacheIndex !== -1 && cacheIndex + 1 < parts.length) {
-        // Pega até o nome do pacote (ex: bun-ui-tests@1.0.5)
         const packagePath = parts.slice(0, cacheIndex + 2).join('/');
         return packagePath;
       }
@@ -44,8 +43,6 @@ function getPackageRoot() {
   // 4. Fallback: usar diretório atual
   return process.cwd();
 }
-
-const packageRoot = getPackageRoot();
 
 // Cores ANSI suaves
 const colors = {
@@ -64,6 +61,38 @@ const COMMANDS = {
   help: "Show this help message"
 };
 
+async function findGlobalPackageRoot(): Promise<string | null> {
+  try {
+    const home = homedir();
+    const cacheDir = join(home, ".bun", "install", "cache");
+    
+    // Check if cache dir exists
+    if (!await Bun.file(cacheDir).exists() && !await Bun.file(join(cacheDir, "..")).exists()) {
+       return null;
+    }
+
+    // Read directory entries of cacheDir
+    const entries = await readdir(cacheDir);
+    const myPackages = entries.filter(e => e.startsWith("bun-ui-tests@"));
+    
+    // Sort by version (simple string sort for now, assuming standard format)
+    myPackages.sort().reverse(); 
+    
+    for (const pkgName of myPackages) {
+       const candidate = join(cacheDir, pkgName);
+       const runnerPath = join(candidate, "ui-runner.ts");
+       const distPath = join(candidate, "app", "dist", "index.html");
+       
+       if (await Bun.file(runnerPath).exists() && await Bun.file(distPath).exists()) {
+         return candidate;
+       }
+    }
+  } catch (e) {
+    return null;
+  }
+  return null;
+}
+
 async function findVerifiedRoot(): Promise<string> {
   const possibleRoots = [
     getPackageRoot(),
@@ -81,12 +110,20 @@ async function findVerifiedRoot(): Promise<string> {
     }
   }
 
-  // Se não achou, tenta procurar subindo diretórios
+  // Fallback: search in global cache
+  const globalRoot = await findGlobalPackageRoot();
+  if (globalRoot) return globalRoot;
+
+  // Se não achou, tenta procurar subindo diretórios (mas verifica ambos os arquivos)
   try {
     let current = getPackageRoot();
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       const runnerPath = join(current, "ui-runner.ts");
-      if (await Bun.file(runnerPath).exists()) return current;
+      const distPath = join(current, "app", "dist", "index.html");
+      
+      if (await Bun.file(runnerPath).exists() && await Bun.file(distPath).exists()) {
+        return current;
+      }
       current = dirname(current);
     }
   } catch (e) {}
