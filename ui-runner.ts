@@ -14,25 +14,21 @@
 import { spawn } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync } from "node:fs";
 
 // Determina o diretório do executável ou script
 const getBaseDir = () => {
   // Se rodando como executável compilado, pega o diretório onde o CLI foi instalado
-  // O executável fica na raiz do pacote, então app/dist fica relativo a ele
   if (import.meta.path && !import.meta.path.endsWith('.ts')) {
-    // É um executável compilado - usa process.execPath (path real do executável)
-    // import.meta.path retorna um path virtual do bunfs
     return dirname(process.execPath);
   }
-  // Se rodando como script .ts em dev, usa o dirname do próprio arquivo
-  const __filename = realpathSync(fileURLToPath(import.meta.url));
-  return dirname(__filename);
+  // Se rodando como script .ts, usa o dir do próprio arquivo
+  return import.meta.dir;
 };
 
 const baseDir = getBaseDir();
 const distPath = join(baseDir, "app", "dist");
+console.log(`Debug: distPath is ${distPath}`);
 const isDevMode = process.env.BUN_TEST_UI_DEV === "true";
 
 // WebSocket Handler (lógica compartilhada)

@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
 
 import { spawn } from "node:child_process";
-import { readFile, access, realpath } from "node:fs/promises";
+import { readFile, access } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __filename = await realpath(fileURLToPath(import.meta.url));
-const __dirname = dirname(__filename);
+const __dirname = import.meta.dir;
 
 const COMMANDS = {
   run: "Run the test UI (production mode)",
@@ -60,11 +59,12 @@ async function buildFrontend() {
 }
 
 async function checkBuildExists(): Promise<boolean> {
+  const distPath = join(__dirname, "app", "dist", "index.html");
   try {
-    const distPath = join(__dirname, "app", "dist", "index.html");
     await access(distPath);
     return true;
   } catch {
+    console.error(`Debug: Checked path not found: ${distPath}`);
     return false;
   }
 }
