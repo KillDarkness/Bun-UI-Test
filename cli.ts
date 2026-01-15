@@ -169,6 +169,28 @@ async function runTestUI() {
     console.log("  1. The package wasn't built before publishing");
     console.log("  2. You're running from source (run: bun run build first)");
     console.log("  3. Installation issue\n");
+
+    console.log(`${colors.gray}--- Debug Information ---`);
+    console.log(`Resolved Root: ${root}`);
+    console.log(`import.meta.url: ${import.meta.url}`);
+    console.log(`process.argv[1]: ${process.argv[1]}`);
+    console.log(`process.cwd(): ${process.cwd()}`);
+    
+    try {
+      console.log(`\nContents of ${root}:`);
+      const entries = await readdir(root);
+      console.log(entries.join("\n"));
+      
+      const appPath = join(root, "app");
+      if (await Bun.file(appPath).exists() || await Bun.file(join(appPath, "package.json")).exists()) {
+          console.log(`\nContents of ${appPath}:`);
+          const appEntries = await readdir(appPath);
+          console.log(appEntries.join("\n"));
+      }
+    } catch (e) {
+      console.log(`Error reading directory: ${e}`);
+    }
+    console.log(`-------------------------${colors.reset}\n`);
     
     process.exit(1);
   }
