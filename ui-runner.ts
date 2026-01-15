@@ -15,7 +15,7 @@ import { spawn } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 
 // Determina o diretório do executável ou script
 const getBaseDir = () => {
@@ -27,7 +27,7 @@ const getBaseDir = () => {
     return dirname(process.execPath);
   }
   // Se rodando como script .ts em dev, usa o dirname do próprio arquivo
-  const __filename = fileURLToPath(import.meta.url);
+  const __filename = realpathSync(fileURLToPath(import.meta.url));
   return dirname(__filename);
 };
 

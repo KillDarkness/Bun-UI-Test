@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 
 import { spawn } from "node:child_process";
-import { readFile, access } from "node:fs/promises";
+import { readFile, access, realpath } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __filename = fileURLToPath(import.meta.url);
+const __filename = await realpath(fileURLToPath(import.meta.url));
 const __dirname = dirname(__filename);
 
 const COMMANDS = {
