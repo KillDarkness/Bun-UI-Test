@@ -1,5 +1,5 @@
 {
-  "name": "buntestui",
+  "name": "@killd/buntestui",
   "version": "1.0.0",
   "description": "A beautiful UI for running Bun tests",
   "type": "module",
@@ -22,12 +22,6 @@
     "testing",
     "runner"
   ],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "ws": "^8.18.0"
-  },
-  "devDependencies": {
-    "@types/ws": "^8.5.13"
-  }
+  "author": "killd",
+  "license": "MIT"
 }
