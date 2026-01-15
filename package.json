@@ -1,5 +1,5 @@
 {
-  "name": "@killd/buntestui",
+  "name": "buntestui",
   "version": "1.0.0",
   "description": "A beautiful UI for running Bun tests",
   "type": "module",
