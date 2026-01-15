@@ -1,115 +1,72 @@
-# 🧪 Bun Test UI
+# Bun UI Test
 
-Uma interface visual moderna e bonita para rodar e visualizar seus testes Bun em tempo real.
+A modern web-based interface for running and monitoring Bun tests in real-time.
 
-![Tests](https://img.shields.io/badge/tests-passing-blue)
-![Bun](https://img.shields.io/badge/bun-1.0+-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+## Overview
 
-## ✨ Features
+Bun UI Test provides a clean and efficient dashboard for your Bun test suites. It automatically discovers test files, allows for selective execution, and displays live output through a unified WebSocket server.
 
-- 🎨 **Interface Moderna** - Design limpo com tema dark
-- ⚡ **Tempo Real** - Veja os testes rodando ao vivo via WebSocket
-- 🔍 **Busca Recursiva** - Encontra automaticamente todos os arquivos de teste no projeto
-- 📂 **Organização por Arquivo** - Testes agrupados por arquivo com expansão/colapso
-- ▶️ **Execução Seletiva** - Rode todos os testes, um arquivo específico, ou um teste individual
-- 📊 **Estatísticas** - Contador de testes passados, falhos e em execução
-- 🎯 **Suporte Completo** - Detecta `.test.ts`, `.spec.js`, `_test.tsx` e mais
-- 🚀 **Performance** - Backend compilado para máxima velocidade
+## Features
 
-## 🚀 Instalação Rápida
+- Real-time Updates: Monitor test progress live via WebSocket communication.
+- Automated Discovery: Recursively finds test files including .test, .spec, and _test patterns.
+- Selective Execution: Run individual tests, specific files, or the entire suite.
+- Comprehensive Reporting: Track pass/fail statistics and execution duration.
+- Unified Server: Serves both the web interface and WebSocket data on a single port (5050) in production.
+- Zero Configuration: Works out of the box with standard Bun test patterns.
 
-```bash
-# Clone o repositório
-git clone <repo-url>
-cd buntestui
+## Installation
 
-# Instale globalmente
-bun link
-
-# Builde o projeto
-buntestui build
-```
-
-## 📖 Uso
-
-### Em qualquer projeto com testes Bun:
+### Global Installation
+Install the package globally using npm or bun:
 
 ```bash
-cd ~/meu-projeto
-buntestui run
+npm install -g bun-ui-tests
+# or
+bun add -g bun-ui-tests
 ```
 
-Abra seu navegador em **http://localhost:3000** e veja a mágica acontecer! ✨
+### Direct Execution
+Run it without installation using bunx:
 
-## 🎮 Comandos
-
-| Comando | Descrição |
-|---------|-----------|
-| `buntestui build` | Builda o frontend (Vite) e backend (executável) |
-| `buntestui run` | Inicia o Test UI em modo produção (usa arquivos buildados) |
-| `buntestui dev` | Inicia em modo desenvolvimento (hot reload) |
-| `buntestui help` | Mostra ajuda |
-
-## 📋 Padrões de Teste Suportados
-
-O Bun Test UI detecta automaticamente:
-
-- `*.test.ts` / `*.test.js` / `*.test.tsx` / `*.test.jsx`
-- `*.spec.ts` / `*.spec.js` / `*.spec.tsx` / `*.spec.jsx`
-- `*_test.ts` / `*_test.js` / `*_test.tsx` / `*_test.jsx`
-- `*_spec.ts` / `*_spec.js` / `*_spec.tsx` / `*_spec.jsx`
-
-## 🏗️ Arquitetura
-
-```
-┌─────────────┐         WebSocket         ┌─────────────┐
-│             │      (port 5060)          │             │
-│  Frontend   │◄─────────────────────────►│  Backend    │
-│  (React)    │                           │  (Bun)      │
-│  port 5050  │                           │             │
-└─────────────┘                           └─────────────┘
-                                                  │
-                                                  ▼
-                                          ┌──────────────┐
-                                          │  bun test    │
-                                          │  (spawned)   │
-                                          └──────────────┘
+```bash
+bunx bun-ui-tests run
 ```
 
-- **Frontend**: React + Vite + Tailwind CSS
-- **Backend**: Bun native WebSocket + process spawning
-- **Comunicação**: WebSocket em tempo real
-- **Compilado**: Executável standalone (~93MB)
+## Usage
 
-## 🎨 Interface
+### Production Mode
+Navigate to your project directory and run:
 
-A interface possui:
+```bash
+bun-ui-tests run
+```
+Access the interface at http://localhost:5050.
 
-- **Painel de Testes**: Lista de arquivos e testes com status visual
-- **Painel de Output**: Logs em tempo real com syntax highlighting
-- **Header**: Estatísticas e controles de execução
-- **Design Responsivo**: Funciona em mobile e desktop
+### Development Mode
+For contributors working on the UI itself:
 
-### Cores:
+```bash
+bun-ui-tests dev
+```
 
-- 🔵 **Azul**: Testes passando, status conectado
-- 🟢 **Verde**: Logs de sucesso `(pass)`
-- 🔴 **Vermelho**: Testes falhando, erros
-- 🟡 **Amarelo**: Testes em execução
+## Supported Patterns
 
-## 📚 Documentação Completa
+The runner automatically detects the following file patterns:
+- *.test.ts, *.test.js, *.test.tsx, *.test.jsx
+- *.spec.ts, *.spec.js, *.spec.tsx, *.spec.jsx
+- *_test.ts, *_test.js, *_test.tsx, *_test.jsx
+- *_spec.ts, *_spec.js, *_spec.tsx, *_spec.jsx
 
-Veja [INSTALL.md](./INSTALL.md) para instruções detalhadas de instalação e uso.
+## Architecture
 
-## 🤝 Contribuindo
+Bun UI Test operates by spawning the native `bun test` command as a child process, parsing the stdout/stderr streams, and broadcasting the results to the web frontend. This approach ensures compatibility with all Bun test features without requiring internal API access.
 
-Contribuições são bem-vindas! Sinta-se livre para abrir issues e pull requests.
+## Links
 
-## 📄 Licença
+- GitHub Repository: [https://github.com/KillDarkness/Bun-UI-Test](https://github.com/KillDarkness/Bun-UI-Test)
+- NPM Package: [https://www.npmjs.com/package/bun-ui-tests](https://www.npmjs.com/package/bun-ui-tests)
+
+## License
 
 MIT
-
-## 🙏 Agradecimentos
-
-Feito com ❤️ para a comunidade Bun
