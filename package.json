@@ -1,6 +1,6 @@
 {
   "name": "bun-ui-tests",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A beautiful UI for running Bun tests",
   "type": "module",
   "bin": {
