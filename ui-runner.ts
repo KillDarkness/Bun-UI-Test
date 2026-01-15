@@ -21,12 +21,22 @@ const getBaseDir = () => {
   if (import.meta.path && !import.meta.path.endsWith('.ts')) {
     return dirname(process.execPath);
   }
+  
+  // Try process.argv[1] to find real path
+  try {
+     const argvPath = process.argv[1];
+     if (argvPath && argvPath.endsWith("ui-runner.ts")) {
+       return dirname(argvPath);
+     }
+  } catch (e) {}
+
   // Se rodando como script .ts, usa o dir do próprio arquivo
   return import.meta.dir;
 };
 
 const baseDir = getBaseDir();
 const distPath = join(baseDir, "app", "dist");
+console.log(`Debug: ui-runner argv[1] is ${process.argv[1]}`);
 console.log(`Debug: distPath is ${distPath}`);
 const isDevMode = process.env.BUN_TEST_UI_DEV === "true";
 

@@ -2,10 +2,25 @@
 
 import { spawn } from "node:child_process";
 import { readFile, access } from "node:fs/promises";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = import.meta.dir;
+// Robustly determine the package root directory
+function getPackageRoot() {
+  // 1. Try to use process.argv[1] which often points to the real script path
+  // when run via bunx or direct execution.
+  try {
+    const argvPath = process.argv[1];
+    if (argvPath && argvPath.endsWith("cli.ts")) {
+       return dirname(argvPath);
+    }
+  } catch (e) {}
+
+  // 2. Fallback to import.meta.dir
+  return import.meta.dir;
+}
+
+const __dirname = getPackageRoot();
 
 const COMMANDS = {
   run: "Run the test UI (production mode)",
@@ -60,8 +75,8 @@ async function buildFrontend() {
 
 async function checkBuildExists(): Promise<boolean> {
   const distPath = join(__dirname, "app", "dist", "index.html");
-  console.error(`Debug: __dirname is ${__dirname}`);
-  console.error(`Debug: import.meta.url is ${import.meta.url}`);
+  console.error(`Debug: process.argv[1] is ${process.argv[1]}`);
+  console.error(`Debug: Resolved __dirname is ${__dirname}`);
   try {
     const exists = await Bun.file(distPath).exists();
     if (!exists) {
