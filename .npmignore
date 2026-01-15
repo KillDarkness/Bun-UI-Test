@@ -1,13 +1,20 @@
-# Ignore source files not needed in production
+# Source and config
 app/src
 app/public
+app/node_modules
+app/*.config.js
+app/*.config.ts
 app/*.json
-app/*.ts
-app/*.js
+app/*.lock
+app/README.md
+
+# Project files
 test/
 docs/
 .gemini/
 .github/
+.gitignore
+tsconfig.json
 
-# But DO NOT ignore the build output
-!app/dist/
+# Logs
+*.log

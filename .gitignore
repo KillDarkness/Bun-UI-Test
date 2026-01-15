@@ -1,12 +1,13 @@
 # Executável compilado
 buntestui-runner
+buntestui-runner-test
 
 # Node modules
 node_modules/
 
-# Build outputs
-dist/
-build/
+# Build outputs (Root only)
+/dist/
+/build/
 *.log
 
 # OS
@@ -22,4 +23,3 @@ Thumbs.db
 
 # Bun
 .bun/
-buntestui-runner-test
