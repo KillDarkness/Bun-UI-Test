@@ -5,22 +5,42 @@ import { readFile, access } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Robustly determine the package root directory
+// Função robusta para determinar o diretório raiz do pacote
 function getPackageRoot() {
-  // 1. Try to use process.argv[1] which often points to the real script path
-  // when run via bunx or direct execution.
+  // 1. Tentar import.meta.dir (Bun específico)
+  if (import.meta.dir) {
+    return import.meta.dir;
+  }
+
+  // 2. Tentar process.argv[1] (caminho do script)
   try {
     const argvPath = process.argv[1];
-    if (argvPath && argvPath.endsWith("cli.ts")) {
-       return dirname(argvPath);
+    if (argvPath) {
+      // Se é um arquivo .ts, usa o diretório dele
+      if (argvPath.endsWith('.ts')) {
+        return dirname(argvPath);
+      }
+      
+      // Se é um executável, procura node_modules
+      // bunx instala em: ~/.bun/install/cache/bun-ui-tests@version/
+      const parts = argvPath.split('/');
+      const cacheIndex = parts.findIndex(p => p === 'cache');
+      if (cacheIndex !== -1 && cacheIndex + 1 < parts.length) {
+        // Pega até o nome do pacote (ex: bun-ui-tests@1.0.5)
+        const packagePath = parts.slice(0, cacheIndex + 2).join('/');
+        return packagePath;
+      }
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error('Error resolving from argv[1]:', e);
+  }
 
-  // 2. Fallback to import.meta.dir
-  return import.meta.dir;
+  // 3. Fallback: usar diretório atual
+  console.warn('⚠️ Could not determine package root, using current directory');
+  return process.cwd();
 }
 
-const __dirname = getPackageRoot();
+const packageRoot = getPackageRoot();
 
 const COMMANDS = {
   run: "Run the test UI (production mode)",
@@ -33,7 +53,7 @@ async function showHelp() {
 🧪 Bun Test UI - A beautiful UI for running Bun tests
 
 Usage:
-  buntestui <command>
+  bunx bun-ui-tests <command>
 
 Commands:
   run       Start the test UI (production mode)
@@ -41,50 +61,44 @@ Commands:
   help      Show this help message
 
 Examples:
-  buntestui run      # Run in production mode
-  buntestui dev      # Run in development mode (for testing)
+  bunx bun-ui-tests run      # Run in production mode
+  bunx bun-ui-tests dev      # Run in development mode (for testing)
 `);
 }
 
-async function buildFrontend() {
-  console.log("🏗️  Building frontend...\n");
-  
-  const appDir = join(__dirname, "app");
-  
-  return new Promise<void>((resolve, reject) => {
-    const proc = spawn("bun", ["run", "build"], {
-      cwd: appDir,
-      stdio: "inherit",
-      shell: true
-    });
-    
-    proc.on("close", (code) => {
-      if (code === 0) {
-        console.log("\n✅ Frontend built successfully!");
-        resolve();
-      } else {
-        reject(new Error(`Frontend build failed with code ${code}`));
-      }
-    });
-    
-    proc.on("error", (err) => {
-      reject(err);
-    });
-  });
-}
-
 async function checkBuildExists(): Promise<boolean> {
-  const distPath = join(__dirname, "app", "dist", "index.html");
-  console.error(`Debug: process.argv[1] is ${process.argv[1]}`);
-  console.error(`Debug: Resolved __dirname is ${__dirname}`);
+  const distPath = join(packageRoot, "app", "dist", "index.html");
+  
+  console.log(`🔍 Debug Info:`);
+  console.log(`   - process.argv[1]: ${process.argv[1]}`);
+  console.log(`   - Resolved packageRoot: ${packageRoot}`);
+  console.log(`   - Looking for: ${distPath}`);
+  
   try {
     const exists = await Bun.file(distPath).exists();
     if (!exists) {
-      console.error(`Debug: Bun.file.exists failed for: ${distPath}`);
+      console.log(`   - File exists: NO ❌`);
+      
+      // Tentar procurar em locais alternativos
+      const alternatives = [
+        join(process.cwd(), "app", "dist", "index.html"),
+        join(dirname(process.argv[0]), "app", "dist", "index.html"),
+      ];
+      
+      console.log(`\n🔍 Trying alternative paths:`);
+      for (const alt of alternatives) {
+        const altExists = await Bun.file(alt).exists();
+        console.log(`   - ${alt}: ${altExists ? '✓' : '✗'}`);
+        if (altExists) {
+          return true;
+        }
+      }
+    } else {
+      console.log(`   - File exists: YES ✓`);
     }
     return exists;
   } catch (err) {
-    console.error(`Debug: Error checking path ${distPath}:`, err);
+    console.error(`❌ Error checking path:`, err);
     return false;
   }
 }
@@ -94,9 +108,19 @@ async function runTestUI() {
   const buildExists = await checkBuildExists();
   
   if (!buildExists) {
-    console.log("⚠️  Frontend assets not found.\n");
-    console.log("If you are running from source, please run: bun run build");
-    console.log("If you installed via npm, this might be a packaging issue.\n");
+    console.log("\n⚠️  Frontend assets not found.\n");
+    console.log("This usually means one of:");
+    console.log("  1. The package wasn't built before publishing (contact maintainer)");
+    console.log("  2. You're running from source (run: bun run build first)");
+    console.log("  3. Installation issue (try: npm cache clean --force)\n");
+    
+    console.log("💡 Temporary workaround:");
+    console.log("   git clone https://github.com/KillDarkness/Bun-UI-Test.git");
+    console.log("   cd Bun-UI-Test");
+    console.log("   bun install");
+    console.log("   cd app && bun install && bun run build && cd ..");
+    console.log("   bun run ui-runner.ts\n");
+    
     process.exit(1);
   }
   
@@ -106,11 +130,10 @@ async function runTestUI() {
   console.log("Press Ctrl+C to stop\n");
   
   // Roda o script do backend diretamente com Bun
-  // O usuário OBRIGATORIAMENTE tem Bun instalado para usar esta ferramenta
-  const runnerScript = join(__dirname, "ui-runner.ts");
+  const runnerScript = join(packageRoot, "ui-runner.ts");
   
   const proc = spawn("bun", ["run", runnerScript], {
-    cwd: process.cwd(), // Roda no diretório atual do usuário
+    cwd: process.cwd(),
     stdio: "inherit",
     shell: false,
     env: { ...process.env, NODE_ENV: "production" }
@@ -142,8 +165,7 @@ async function runDevMode() {
   console.log("🌐 Frontend: http://localhost:5050 (with hot reload)\n");
   console.log("Press Ctrl+C to stop\n");
   
-  // Inicia o backend (ui-runner.ts) com bun run e flag de dev mode
-  const backendPath = join(__dirname, "ui-runner.ts");
+  const backendPath = join(packageRoot, "ui-runner.ts");
   const backendProc = spawn("bun", ["run", backendPath], {
     cwd: process.cwd(),
     stdio: "inherit",
@@ -151,18 +173,15 @@ async function runDevMode() {
     env: { ...process.env, BUN_TEST_UI_DEV: "true" }
   });
   
-  // Aguarda um pouco para o backend iniciar
   await new Promise(resolve => setTimeout(resolve, 1000));
   
-  // Inicia o frontend em modo dev
-  const appDir = join(__dirname, "app");
+  const appDir = join(packageRoot, "app");
   const frontendProc = spawn("bun", ["run", "dev"], {
     cwd: appDir,
     stdio: "inherit",
     shell: true
   });
   
-  // Handle Ctrl+C
   process.on("SIGINT", () => {
     console.log("\n\n👋 Stopping Bun Test UI...");
     backendProc.kill("SIGINT");
@@ -170,7 +189,6 @@ async function runDevMode() {
     process.exit(0);
   });
   
-  // Se um processo terminar, termina o outro também
   backendProc.on("close", (code) => {
     console.log("\n❌ Backend stopped");
     frontendProc.kill("SIGINT");
