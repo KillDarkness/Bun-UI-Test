@@ -45,7 +45,18 @@ function getPackageRoot() {
   return process.cwd();
 }
 
-let packageRoot = getPackageRoot();
+const packageRoot = getPackageRoot();
+
+// Cores ANSI suaves
+const colors = {
+  reset: "\x1b[0m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
+  gray: "\x1b[90m"
+};
 
 const COMMANDS = {
   run: "Run the test UI (production mode)",
@@ -55,7 +66,7 @@ const COMMANDS = {
 
 async function findVerifiedRoot(): Promise<string> {
   const possibleRoots = [
-    packageRoot,
+    getPackageRoot(),
     process.cwd(),
     dirname(fileURLToPath(import.meta.url)),
   ];
@@ -70,9 +81,9 @@ async function findVerifiedRoot(): Promise<string> {
     }
   }
 
-  // Se não achou, tenta procurar subindo diretórios (útil se estiver em node_modules/.bin)
+  // Se não achou, tenta procurar subindo diretórios
   try {
-    let current = packageRoot;
+    let current = getPackageRoot();
     for (let i = 0; i < 3; i++) {
       const runnerPath = join(current, "ui-runner.ts");
       if (await Bun.file(runnerPath).exists()) return current;
@@ -80,12 +91,12 @@ async function findVerifiedRoot(): Promise<string> {
     }
   } catch (e) {}
 
-  return packageRoot;
+  return getPackageRoot();
 }
 
 async function showHelp() {
   console.log(`
-🧪 Bun Test UI - A beautiful UI for running Bun tests
+${colors.cyan}Bun Test UI${colors.reset} - A beautiful UI for running Bun tests
 
 Usage:
   bunx bun-ui-tests <command>
@@ -104,56 +115,32 @@ Examples:
 async function checkBuildExists(root: string): Promise<boolean> {
   const distPath = join(root, "app", "dist", "index.html");
   
-  console.log(`🔍 Debug Info:`);
-  console.log(`   - process.argv[1]: ${process.argv[1]}`);
-  console.log(`   - Resolved packageRoot: ${root}`);
-  console.log(`   - Looking for: ${distPath}`);
-  
   try {
-    const exists = await Bun.file(distPath).exists();
-    if (!exists) {
-      console.log(`   - File exists: NO ❌`);
-    } else {
-      console.log(`   - File exists: YES ✓`);
-    }
-    return exists;
+    return await Bun.file(distPath).exists();
   } catch (err) {
-    console.error(`❌ Error checking path:`, err);
     return false;
   }
 }
 
 async function runTestUI() {
-  // Encontra o root real onde estão os arquivos
-  packageRoot = await findVerifiedRoot();
-
-  // Verifica se o build do frontend existe
-  const buildExists = await checkBuildExists(packageRoot);
+  const root = await findVerifiedRoot();
+  const buildExists = await checkBuildExists(root);
   
   if (!buildExists) {
-    console.log("\n⚠️  Frontend assets not found.\n");
+    console.log(`\n${colors.yellow}!${colors.reset} Frontend assets not found.\n`);
     console.log("This usually means one of:");
-    console.log("  1. The package wasn't built before publishing (contact maintainer)");
+    console.log("  1. The package wasn't built before publishing");
     console.log("  2. You're running from source (run: bun run build first)");
-    console.log("  3. Installation issue (try: npm cache clean --force)\n");
-    
-    console.log("💡 Temporary workaround:");
-    console.log("   git clone https://github.com/KillDarkness/Bun-UI-Test.git");
-    console.log("   cd Bun-UI-Test");
-    console.log("   bun install");
-    console.log("   cd app && bun install && bun run build && cd ..");
-    console.log("   bun run ui-runner.ts\n");
+    console.log("  3. Installation issue\n");
     
     process.exit(1);
   }
   
-  console.log("🚀 Starting Bun Test UI (Production Mode)...\n");
-  console.log("📡 WebSocket server: ws://localhost:5050/ws");
-  console.log("🌐 Frontend: http://localhost:5050\n");
-  console.log("Press Ctrl+C to stop\n");
+  console.log(`${colors.green}›${colors.reset} Starting Bun Test UI...`);
+  console.log(`${colors.gray}→ WebSocket: ws://localhost:5050/ws`);
+  console.log(`→ Frontend:  http://localhost:5050${colors.reset}\n`);
   
-  // Roda o script do backend diretamente com Bun
-  const runnerScript = join(packageRoot, "ui-runner.ts");
+  const runnerScript = join(root, "ui-runner.ts");
   
   const proc = spawn("bun", ["run", runnerScript], {
     cwd: process.cwd(),
@@ -164,34 +151,31 @@ async function runTestUI() {
   
   proc.on("close", (code) => {
     if (code !== 0) {
-      console.error(`\n❌ Process exited with code ${code}`);
+      console.error(`\n${colors.red}✗${colors.reset} Process exited with code ${code}`);
       process.exit(code || 1);
     }
   });
   
   proc.on("error", (err) => {
-    console.error("❌ Error starting test UI:", err);
+    console.error(`${colors.red}✗${colors.reset} Error starting test UI:`, err);
     process.exit(1);
   });
   
-  // Handle Ctrl+C
   process.on("SIGINT", () => {
-    console.log("\n\n👋 Stopping Bun Test UI...");
+    console.log(`\n\n${colors.gray}Stopping Bun Test UI...${colors.reset}`);
     proc.kill("SIGINT");
     process.exit(0);
   });
 }
 
 async function runDevMode() {
-  // Encontra o root real onde estão os arquivos
-  packageRoot = await findVerifiedRoot();
+  const root = await findVerifiedRoot();
 
-  console.log("🚀 Starting Bun Test UI (Development Mode)...\n");
-  console.log("📡 WebSocket server: ws://localhost:5060");
-  console.log("🌐 Frontend: http://localhost:5050 (with hot reload)\n");
-  console.log("Press Ctrl+C to stop\n");
+  console.log(`${colors.cyan}›${colors.reset} Starting Bun Test UI (Dev Mode)...`);
+  console.log(`${colors.gray}→ WebSocket: ws://localhost:5060`);
+  console.log(`→ Frontend:  http://localhost:5050${colors.reset}\n`);
   
-  const backendPath = join(packageRoot, "ui-runner.ts");
+  const backendPath = join(root, "ui-runner.ts");
   const backendProc = spawn("bun", ["run", backendPath], {
     cwd: process.cwd(),
     stdio: "inherit",
@@ -201,7 +185,7 @@ async function runDevMode() {
   
   await new Promise(resolve => setTimeout(resolve, 1000));
   
-  const appDir = join(packageRoot, "app");
+  const appDir = join(root, "app");
   const frontendProc = spawn("bun", ["run", "dev"], {
     cwd: appDir,
     stdio: "inherit",
@@ -209,20 +193,18 @@ async function runDevMode() {
   });
   
   process.on("SIGINT", () => {
-    console.log("\n\n👋 Stopping Bun Test UI...");
+    console.log(`\n\n${colors.gray}Stopping Bun Test UI...${colors.reset}`);
     backendProc.kill("SIGINT");
     frontendProc.kill("SIGINT");
     process.exit(0);
   });
   
   backendProc.on("close", (code) => {
-    console.log("\n❌ Backend stopped");
     frontendProc.kill("SIGINT");
     process.exit(code || 1);
   });
   
   frontendProc.on("close", (code) => {
-    console.log("\n❌ Frontend stopped");
     backendProc.kill("SIGINT");
     process.exit(code || 1);
   });
@@ -235,7 +217,7 @@ switch (command) {
   case "run":
     runTestUI()
       .catch((err) => {
-        console.error("❌ Failed to start:", err);
+        console.error(`${colors.red}✗${colors.reset} Failed to start:`, err);
         process.exit(1);
       });
     break;
@@ -243,7 +225,7 @@ switch (command) {
   case "dev":
     runDevMode()
       .catch((err) => {
-        console.error("❌ Failed to start dev mode:", err);
+        console.error(`${colors.red}✗${colors.reset} Failed to start dev mode:`, err);
         process.exit(1);
       });
     break;
@@ -255,7 +237,7 @@ switch (command) {
     break;
     
   default:
-    console.error(`❌ Unknown command: ${command}\n`);
+    console.error(`${colors.red}✗${colors.reset} Unknown command: ${command}\n`);
     showHelp();
     process.exit(1);
 }

@@ -45,22 +45,29 @@ const getBaseDir = () => {
   return process.cwd();
 };
 
+const colors = {
+  reset: "\x1b[0m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
+  gray: "\x1b[90m"
+};
+
 const baseDir = getBaseDir();
 const distPath = join(baseDir, "app", "dist");
-console.log(`Debug: ui-runner argv[1] is ${process.argv[1]}`);
-console.log(`Debug: distPath is ${distPath}`);
 const isDevMode = process.env.BUN_TEST_UI_DEV === "true";
 
 // WebSocket Handler (lógica compartilhada)
 const websocketHandler = {
   async open(ws: any) {
-    console.log("✓ UI connected");
+    console.log(`${colors.green}✓${colors.reset} UI connected`);
     
     // Escaneia arquivos de teste
     const testFiles = await scanTestFiles();
     
     // Escaneia todos os testes de cada arquivo
-    console.log("📖 Reading test files to extract test names...");
     const testsMap = await scanAllTests();
     
     // Envia evento de conexão com lista de arquivos e testes
@@ -73,65 +80,48 @@ const websocketHandler = {
       }
     }));
     
-    console.log(`✓ Found ${testFiles.length} test files with ${Object.values(testsMap).flat().length} tests total`);
+    console.log(`${colors.gray}› Found ${testFiles.length} test files with ${Object.values(testsMap).flat().length} tests total${colors.reset}`);
   },
   message(ws: any, message: any) {
     try {
       const data = JSON.parse(message.toString());
-      console.log('📨 [WEBSOCKET] Mensagem recebida:', data.type, data.payload);
       
       // Processa comandos da UI
       if (data.type === "run:request") {
         const file = data.payload?.file;
         const testName = data.payload?.testName;
         
-        console.log('▶️ [RUN REQUEST] file:', file, 'testName:', testName);
-        
         if (testName) {
-          console.log(`Running specific test: ${testName} in ${file}`);
+          console.log(`${colors.cyan}▶${colors.reset} Running test: ${colors.gray}${testName}${colors.reset} in ${file}`);
         } else if (file) {
-          console.log(`Running file: ${file}`);
+          console.log(`${colors.cyan}▶${colors.reset} Running file: ${file}`);
         } else {
-          console.log("Running all tests");
+          console.log(`${colors.cyan}▶${colors.reset} Running all tests`);
         }
         
         runTests(ws, file, testName);
-      } else {
-        console.log('⚠️ [WEBSOCKET] Tipo desconhecido:', data.type);
       }
     } catch (err) {
       console.error("Error processing message:", err);
     }
   },
   close(ws: any) {
-    console.log("✗ UI disconnected");
+    console.log(`${colors.red}✗${colors.reset} UI disconnected`);
   },
 };
 
 if (isDevMode) {
   // === MODO DESENVOLVIMENTO ===
-  // Frontend roda via Vite na porta 5050
-  // Backend roda separadamente na porta 5060 (apenas WS)
-  
   Bun.serve({
     port: 5060,
     fetch(req, server) {
-      // Aceita upgrade em qualquer path ou especificamente /ws
-      if (server.upgrade(req)) {
-        return; 
-      }
+      if (server.upgrade(req)) return; 
       return new Response("Bun Test UI Backend (Dev Mode)", { status: 200 });
     },
     websocket: websocketHandler
   });
-  
-  console.log("📡 WebSocket server running on ws://localhost:5060");
-  
 } else {
   // === MODO PRODUÇÃO ===
-  // Servidor ÚNICO na porta 5050
-  // Serve arquivos estáticos do frontend E WebSocket no mesmo endpoint
-  
   const PORT = 5050;
   
   Bun.serve({
@@ -141,24 +131,18 @@ if (isDevMode) {
       
       // 1. WebSocket Upgrade (/ws)
       if (url.pathname === "/ws") {
-        if (server.upgrade(req)) {
-          return;
-        }
+        if (server.upgrade(req)) return;
         return new Response("WebSocket upgrade failed", { status: 400 });
       }
       
       // 2. Arquivos Estáticos (Frontend)
       const file = Bun.file(join(distPath, url.pathname === "/" ? "/index.html" : url.pathname));
-      if (await file.exists()) {
-        return new Response(file);
-      }
+      if (await file.exists()) return new Response(file);
       
       // SPA fallback
       if (!url.pathname.includes(".")) {
         const indexFile = Bun.file(join(distPath, "index.html"));
-        if (await indexFile.exists()) {
-          return new Response(indexFile);
-        }
+        if (await indexFile.exists()) return new Response(indexFile);
       }
       
       return new Response("Frontend build not found.", { status: 404 });
@@ -166,8 +150,7 @@ if (isDevMode) {
     websocket: websocketHandler
   });
   
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📡 WebSocket endpoint available at ws://localhost:${PORT}/ws`);
+  console.log(`${colors.green}✓${colors.reset} Server running on http://localhost:${PORT}`);
 }
 
 
@@ -292,16 +275,10 @@ function runTests(ws: any, file?: string, testName?: string) {
     args.push(file);
   }
   
-  // Bun suporta --test-name-pattern para filtrar testes
-  // Escapa caracteres especiais de regex e usa o nome exato
   if (testName) {
-    // Escapa caracteres especiais de regex
     const escapedName = testName.replace(/[.*+?^${}()|[\\]/g, '\\$&');
     args.push("--test-name-pattern", escapedName);
   }
-  
-  console.log('🚀 [RUN] Comando:', `bun ${args.join(" ")}`);
-  console.log(`Starting bun test ${args.slice(1).join(" ") || "(all)"}...`);
   
   // Emite evento de início
   ws.send(JSON.stringify({
@@ -313,11 +290,9 @@ function runTests(ws: any, file?: string, testName?: string) {
     }
   }));
   
-  // Spawna o processo bun test
-  // IMPORTANTE: Não usamos nenhuma API interna do bun:test
   const bunTest = spawn("bun", args, {
     cwd: process.cwd(),
-    env: { ...process.env, FORCE_COLOR: "0" }, // Desabilita cores para facilitar parsing
+    env: { ...process.env, FORCE_COLOR: "0" },
   });
   
   let currentTestFile = "";
@@ -359,11 +334,6 @@ function runTests(ws: any, file?: string, testName?: string) {
   // Função para enviar bloco de erro
   const flushErrorBlock = () => {
     if (errorBlock.length > 0) {
-      console.log('📦 [ERROR BLOCK] Enviando bloco com', errorBlock.length, 'linhas:');
-      console.log('---START---');
-      console.log(errorBlock.join('\n'));
-      console.log('---END---');
-      
       ws.send(JSON.stringify({
         type: "log",
         payload: { message: errorBlock.join('\n'), stream: "stdout" }
@@ -376,11 +346,6 @@ function runTests(ws: any, file?: string, testName?: string) {
   // Função para enviar bloco de resumo
   const flushSummaryBlock = () => {
     if (summaryBlock.length > 0) {
-      console.log('📊 [SUMMARY BLOCK] Enviando bloco com', summaryBlock.length, 'linhas:');
-      console.log('---START---');
-      console.log(summaryBlock.join('\n'));
-      console.log('---END---');
-      
       ws.send(JSON.stringify({
         type: "log",
         payload: { message: summaryBlock.join('\n'), stream: "stdout" }
@@ -395,52 +360,36 @@ function runTests(ws: any, file?: string, testName?: string) {
     const text = data.toString();
     buffer += text;
     
-    // Processa linhas completas
     const lines = buffer.split("\n");
-    buffer = lines.pop() || ""; // Guarda última linha incompleta
+    buffer = lines.pop() || "";
     
     for (const line of lines) {
       currentTestFile = processLine(line, ws, currentTestFile);
-      
-      // Linhas vazias podem fazer parte de blocos
       const trimmed = line.trim();
       
-      // Verifica se é linha de erro
       if (isErrorLine(line)) {
-        console.log('🔴 [ERROR LINE] Detectado:', line.substring(0, 50));
-        // Se estava no resumo, envia o resumo primeiro
         flushSummaryBlock();
-        
         inErrorBlock = true;
         errorBlock.push(line);
         continue;
       }
       
-      // Linha vazia dentro de bloco de erro - mantém no bloco
       if (inErrorBlock && !trimmed) {
-        console.log('🔴 [ERROR EMPTY] Linha vazia no bloco de erro');
         errorBlock.push(line);
         continue;
       }
       
-      // Verifica se é linha de resumo
       if (isSummaryLine(line)) {
-        console.log('📊 [SUMMARY LINE] Detectado:', line.substring(0, 50));
-        // Se estava no erro, envia o erro primeiro
         flushErrorBlock();
-        
         inSummaryBlock = true;
         summaryBlock.push(line);
         continue;
       }
       
-      // Linha normal - envia blocos pendentes e depois a linha
       flushErrorBlock();
       flushSummaryBlock();
       
-      // Envia linhas normais separadamente (se não vazia)
       if (trimmed) {
-        console.log('📝 [NORMAL LINE] Enviando:', line.substring(0, 50));
         ws.send(JSON.stringify({
           type: "log",
           payload: { message: line, stream: "stdout" }
@@ -463,11 +412,8 @@ function runTests(ws: any, file?: string, testName?: string) {
   });
   
   bunTest.on("close", (code) => {
-    console.log(`bun test exited with code ${code}`);
-    
     // Processa buffer pendente antes de finalizar
     if (buffer.trim()) {
-      console.log('⚠️ [CLOSE] Buffer pendente:', buffer.substring(0, 100));
       const lines = buffer.split("\n");
       for (const line of lines) {
         if (line.trim()) {
@@ -499,8 +445,6 @@ function runTests(ws: any, file?: string, testName?: string) {
     // Envia blocos pendentes antes de finalizar
     flushErrorBlock();
     flushSummaryBlock();
-    
-    console.log('✅ [CLOSE] Processo finalizado, todos os logs enviados');
     
     ws.send(JSON.stringify({
       type: "run:complete",
