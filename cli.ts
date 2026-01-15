@@ -60,11 +60,16 @@ async function buildFrontend() {
 
 async function checkBuildExists(): Promise<boolean> {
   const distPath = join(__dirname, "app", "dist", "index.html");
+  console.error(`Debug: __dirname is ${__dirname}`);
+  console.error(`Debug: import.meta.url is ${import.meta.url}`);
   try {
-    await access(distPath);
-    return true;
-  } catch {
-    console.error(`Debug: Checked path not found: ${distPath}`);
+    const exists = await Bun.file(distPath).exists();
+    if (!exists) {
+      console.error(`Debug: Bun.file.exists failed for: ${distPath}`);
+    }
+    return exists;
+  } catch (err) {
+    console.error(`Debug: Error checking path ${distPath}:`, err);
     return false;
   }
 }

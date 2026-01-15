@@ -14,7 +14,6 @@
 import { spawn } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, dirname } from "node:path";
-import { existsSync } from "node:fs";
 
 // Determina o diretório do executável ou script
 const getBaseDir = () => {
@@ -128,29 +127,20 @@ if (isDevMode) {
       }
       
       // 2. Arquivos Estáticos (Frontend)
-      if (existsSync(distPath)) {
-        let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
-        const fullPath = join(distPath, filePath);
-        
-        try {
-          const file = Bun.file(fullPath);
-          if (await file.exists()) {
-            return new Response(file);
-          }
-          
-          // Se não encontrou o arquivo e não é um asset (SPA fallback)
-          if (!filePath.includes(".")) {
-            const indexFile = Bun.file(join(distPath, "index.html"));
-            return new Response(indexFile);
-          }
-        } catch (err) {
-          console.error("Error serving file:", err);
-        }
-      } else {
-        return new Response("Frontend build not found. Run 'buntestui build' first.", { status: 404 });
+      const file = Bun.file(join(distPath, url.pathname === "/" ? "/index.html" : url.pathname));
+      if (await file.exists()) {
+        return new Response(file);
       }
       
-      return new Response("Not found", { status: 404 });
+      // SPA fallback
+      if (!url.pathname.includes(".")) {
+        const indexFile = Bun.file(join(distPath, "index.html"));
+        if (await indexFile.exists()) {
+          return new Response(indexFile);
+        }
+      }
+      
+      return new Response("Frontend build not found.", { status: 404 });
     },
     websocket: websocketHandler
   });
